@@ -1,11 +1,20 @@
 import { sortProjects } from '../models/project.js';
 import { projectProgress, formatMinutes } from '../utils/time.js';
-import { renderNotepadList, projectTaskIds, focusMyPadLineFromClick } from '../components/notepad-list.js';
+import {
+  renderNotepadList,
+  projectTaskIds,
+  visibleProjectTaskIds,
+  projectCardCanCollapse,
+  PROJECT_COLLAPSED_ACTIVE_LIMIT,
+  focusMyPadLineFromClick,
+} from '../components/notepad-list.js';
 
 const PROJECT_PAD_LINES = 5;
 
+const CHEVRON_SVG = `<svg class="project-card__expand-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 export function renderProjectsView(container, ctx) {
-  const { data, focusTaskId, focusProjectId, handlers } = ctx;
+  const { data, focusTaskId, focusProjectId, projectExpanded, handlers } = ctx;
   const projects = sortProjects(data.projects);
 
   container.innerHTML = '';
@@ -24,6 +33,7 @@ export function renderProjectsView(container, ctx) {
   for (const project of projects) {
     const card = document.createElement('section');
     card.className = 'project-card';
+    card.dataset.projectId = project.id;
     const prog = projectProgress(data.tasks, project.id);
 
     const head = document.createElement('header');
@@ -67,7 +77,15 @@ export function renderProjectsView(container, ctx) {
       stat.textContent = 'No tasks';
     }
 
+    const expanded = projectExpanded?.has(project.id) ?? false;
+    const canCollapse = projectCardCanCollapse(data, project.id);
+
     titleRow.append(title, stat);
+
+    if (canCollapse) {
+      card.classList.toggle('project-card--expanded', expanded);
+      card.classList.toggle('project-card--collapsed', !expanded);
+    }
     head.appendChild(titleRow);
 
     const progress = document.createElement('div');
@@ -94,14 +112,19 @@ export function renderProjectsView(container, ctx) {
     sheet.appendChild(listHost);
     card.appendChild(sheet);
 
-    const ids = projectTaskIds(data, project.id);
+    const ids = expanded
+      ? projectTaskIds(data, project.id)
+      : visibleProjectTaskIds(data, project.id, { expanded: false });
+    const visibleRows = ids.length + 1;
     renderNotepadList(listHost, {
       taskIds: ids,
       data,
       focusTaskId: focusProjectId === project.id ? focusTaskId : null,
       draftProjectId: project.id,
       padMode: true,
-      padMinLines: PROJECT_PAD_LINES,
+      padMinLines: expanded
+        ? PROJECT_PAD_LINES
+        : Math.max(PROJECT_COLLAPSED_ACTIVE_LIMIT + 1, Math.min(PROJECT_PAD_LINES, visibleRows)),
       showPadMeta: true,
       showPadProjectChip: false,
       onRequestFocus: (taskId) => handlers.onRequestFocus({ projectId: project.id, taskId }),
@@ -111,12 +134,33 @@ export function renderProjectsView(container, ctx) {
       onToggle: handlers.onToggle,
       placeholder: 'Type a new task…',
       showMeta: false,
+      promoteOnInput: false,
     });
 
     sheet.addEventListener('click', (e) => {
       if (e.target.closest('button, input, .focus-popover')) return;
       focusMyPadLineFromClick(sheet, e.clientY);
     });
+
+    if (canCollapse) {
+      const footer = document.createElement('div');
+      footer.className = 'project-card__footer';
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.className = 'project-card__expand';
+      expandBtn.innerHTML = CHEVRON_SVG;
+      expandBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      expandBtn.setAttribute(
+        'aria-label',
+        expanded ? 'Collapse task list' : 'Expand task list'
+      );
+      expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handlers.onToggleProjectExpanded(project.id);
+      });
+      footer.appendChild(expandBtn);
+      card.appendChild(footer);
+    }
 
     stack.appendChild(card);
   }

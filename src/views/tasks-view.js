@@ -1,6 +1,3 @@
-import { sortProjects } from '../models/project.js';
-import { sortTasks } from '../models/task.js';
-import { isProjectOutlineDueTask, todayISO, formatDueLabel } from '../utils/dates.js';
 import { mountMyPadDateControl } from '../components/my-pad-date.js';
 import {
   renderNotepadList,
@@ -8,8 +5,16 @@ import {
   focusMyPadLineFromClick,
   MY_PAD_MIN_LINES,
 } from '../components/notepad-list.js';
+import { todayISO, formatDueLabel } from '../utils/dates.js';
+import { renderTasksNotesPanel } from './notes-view.js';
 
 export function renderTasksView(container, ctx) {
+  const { notesOpen } = ctx;
+  if (notesOpen) {
+    renderTasksNotesPanel(container, ctx);
+    return;
+  }
+
   const { data, focusTaskId, padViewDate, handlers } = ctx;
   const viewDate = padViewDate || todayISO();
   const isPadToday = viewDate === todayISO();
@@ -115,76 +120,5 @@ export function renderTasksView(container, ctx) {
   }
 
   stack.appendChild(padCard);
-
-  const outlineCard = document.createElement('section');
-  outlineCard.className = 'project-card project-card--outline';
-
-  const outlineHead = document.createElement('header');
-  outlineHead.className = 'project-card__head project-card__head--compact';
-  const outlineTitleRow = document.createElement('div');
-  outlineTitleRow.className = 'project-card__title-row';
-  const outlineTitle = document.createElement('h2');
-  outlineTitle.className = 'project-card__title';
-  outlineTitle.textContent = 'Projects';
-  outlineTitleRow.appendChild(outlineTitle);
-  outlineHead.appendChild(outlineTitleRow);
-  outlineCard.appendChild(outlineHead);
-
-  const outlineBody = document.createElement('div');
-  outlineBody.className = 'project-outline focus-scroll';
-
-  const projects = sortProjects(data.projects);
-  let outlineHasTasks = false;
-
-  if (!projects.length) {
-    outlineBody.innerHTML = `<p class="muted focus-empty">Switch to <strong>Projects</strong> to add one, then use <strong>+ project</strong> on a task line.</p>`;
-  } else {
-    for (const p of projects) {
-      const tasks = sortTasks(data.tasks, { projectId: p.id }).filter(isProjectOutlineDueTask);
-      if (!tasks.length) continue;
-      outlineHasTasks = true;
-
-      const block = document.createElement('div');
-      block.className = 'project-outline__group';
-      const name = document.createElement('p');
-      name.className = 'project-outline__name';
-      name.textContent = p.name;
-      block.appendChild(name);
-
-      const taskIds = tasks.map((t) => t.id);
-      const outlineSheet = document.createElement('div');
-      outlineSheet.className = 'project-outline__sheet project-card__sheet my-pad-sheet';
-      outlineSheet.setAttribute('role', 'group');
-      outlineSheet.setAttribute('aria-label', `${p.name} tasks due today`);
-
-      const outlineListHost = document.createElement('div');
-      outlineSheet.appendChild(outlineListHost);
-      block.appendChild(outlineSheet);
-
-      renderNotepadList(outlineListHost, {
-        taskIds,
-        data,
-        focusTaskId,
-        padMode: true,
-        padTasksOnly: true,
-        showPadMeta: true,
-        showPadProjectChip: false,
-        onRequestFocus: handlers.onRequestFocus,
-        onUpdate: handlers.onUpdate,
-        onDelete: handlers.onDelete,
-        onToggle: handlers.onToggle,
-        showMeta: false,
-      });
-
-      outlineBody.appendChild(block);
-    }
-
-    if (!outlineHasTasks) {
-      outlineBody.innerHTML = `<p class="muted focus-empty">No project tasks due today.</p>`;
-    }
-  }
-  outlineCard.appendChild(outlineBody);
-  stack.appendChild(outlineCard);
-
   container.appendChild(stack);
 }

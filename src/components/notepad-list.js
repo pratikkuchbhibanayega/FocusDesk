@@ -42,6 +42,7 @@ export function renderNotepadList(
     showPadProjectChip = true,
     padMinLines = MY_PAD_MIN_LINES,
     padTasksOnly = false,
+    promoteOnInput = true,
   }
 ) {
   container.innerHTML = '';
@@ -235,7 +236,7 @@ export function renderNotepadList(
     input.addEventListener('input', () => {
       syncPendingRowChrome();
       if (isEmptyLine) {
-        void promoteEmptyLineIfNeeded();
+        if (promoteOnInput) void promoteEmptyLineIfNeeded();
         return;
       }
       if (task) {
@@ -306,6 +307,15 @@ export function renderNotepadList(
           if (!input.value.trim()) return;
           await promoteEmptyLineIfNeeded();
           if (padTasksOnly || !onCreate) return;
+          if (draftProjectId) {
+            onRequestFocus?.({
+              projectId: draftProjectId,
+              taskId: 'draft',
+              selectionStart: 0,
+              selectionEnd: 0,
+            });
+            return;
+          }
           const created = await onCreate({
             title: '',
             order: Date.now(),
@@ -409,3 +419,22 @@ export function myPadTaskIds(data, { filter = 'all', viewDate = todayISO() } = {
 export function projectTaskIds(data, projectId) {
   return sortTasks(data.tasks, { projectId }).map((t) => t.id);
 }
+
+const PROJECT_COLLAPSED_ACTIVE_LIMIT = 2;
+
+/** Tasks shown on a project card when collapsed (active only, capped). */
+export function visibleProjectTaskIds(data, projectId, { expanded = false } = {}) {
+  const sorted = sortTasks(data.tasks, { projectId });
+  if (expanded) return sorted.map((t) => t.id);
+  const active = sorted.filter((t) => !t.completed);
+  return active.slice(-PROJECT_COLLAPSED_ACTIVE_LIMIT).map((t) => t.id);
+}
+
+export function projectCardCanCollapse(data, projectId) {
+  const sorted = sortTasks(data.tasks, { projectId });
+  const active = sorted.filter((t) => !t.completed);
+  const hasCompleted = sorted.some((t) => t.completed);
+  return active.length > PROJECT_COLLAPSED_ACTIVE_LIMIT || hasCompleted;
+}
+
+export { PROJECT_COLLAPSED_ACTIVE_LIMIT };

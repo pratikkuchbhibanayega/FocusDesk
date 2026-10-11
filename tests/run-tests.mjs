@@ -3,7 +3,12 @@ import { parseTimeInput, formatMinutes, projectProgress, sumRemainingMinutesDueO
 import { isProjectOutlineDueTask, taskVisibleOnMyPad, todayISO } from '../src/utils/dates.js';
 import { createTask } from '../src/models/task.js';
 import { applyTaskFilter } from '../src/models/task.js';
-import { myPadTaskIds } from '../src/components/notepad-list.js';
+import {
+  myPadTaskIds,
+  visibleProjectTaskIds,
+  projectCardCanCollapse,
+} from '../src/components/notepad-list.js';
+import { createVoiceNote, formatVoiceNoteTitle } from '../src/models/voice-note.js';
 
 function test(name, fn) {
   fn();
@@ -95,6 +100,34 @@ test('taskVisibleOnMyPad by date', () => {
   assert.equal(taskVisibleOnMyPad(doneYesterday, today), false);
   assert.equal(taskVisibleOnMyPad(doneYesterday, yesterday), true);
   assert.equal(taskVisibleOnMyPad(createTask({ projectId: 'p1', completed: false }), today), false);
+});
+
+test('visibleProjectTaskIds collapsed shows two active tasks', () => {
+  const pid = 'proj-1';
+  const tasks = {};
+  for (let i = 0; i < 5; i += 1) {
+    const t = createTask({ projectId: pid, title: `a${i}`, completed: false });
+    tasks[t.id] = t;
+  }
+  const done = createTask({ projectId: pid, title: 'done', completed: true });
+  tasks[done.id] = done;
+  const data = { tasks, projects: { [pid]: { id: pid, name: 'P' } } };
+  const visible = visibleProjectTaskIds(data, pid, { expanded: false });
+  assert.equal(visible.length, 2);
+  const activeIds = Object.values(tasks)
+    .filter((t) => t.projectId === pid && !t.completed)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((t) => t.id);
+  assert.deepEqual(visible, activeIds.slice(-2));
+  assert.equal(projectCardCanCollapse(data, pid), true);
+  assert.equal(visibleProjectTaskIds(data, pid, { expanded: true }).length, 6);
+});
+
+test('createVoiceNote default title from date', () => {
+  const d = new Date('2026-10-12T12:30:00');
+  const note = createVoiceNote({ createdAt: d.toISOString(), durationMs: 1200 });
+  assert.equal(note.title, formatVoiceNoteTitle(d));
+  assert.equal(note.durationMs, 1200);
 });
 
 console.log('\nAll tests passed.');
